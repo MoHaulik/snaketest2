@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Snake i WebXR</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; }
+        #startKnap { position: absolute; top: 20px; left: 20px; z-index: 100; }
+    </style>
+</head>
+<body>
+    <button id="startKnap">Start AR</button>
+    <script>
+    let scene, camera, renderer, controller;
+    let slange, mad, spilleplade;
+    let gameStartet = false;
+
+    function init() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const lys = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+        scene.add(lys);
+
+        controller = renderer.xr.getController(0);
+        controller.addEventListener('select', onSelect);
+        scene.add(controller);
+
+        document.getElementById('startKnap').addEventListener('click', onStartAR);
+    }
+
+    function onStartAR() {
+        navigator.xr.requestSession('immersive-ar', {
+            requiredFeatures: ['hit-test']
+        }).then((session) => {
+            renderer.xr.setSession(session);
+            renderer.setAnimationLoop(render);
+        });
+    }
+
+    function onSelect() {
+        if (!gameStartet) {
+            startSpil();
+        }
+    }
+
+    function startSpil() {
+        gameStartet = true;
+        
+        spilleplade = new THREE.Group();
+        spilleplade.position.set(0, -0.5, -1);
+        scene.add(spilleplade);
+
+        const pladeGeometri = new THREE.BoxGeometry(1, 0.1, 1);
+        const pladeMateriale = new THREE.MeshPhongMaterial({ color: 0x999999 });
+        const plade = new THREE.Mesh(pladeGeometri, pladeMateriale);
+        spilleplade.add(plade);
+
+        slange = new Slange();
+        mad = new Mad();
+    }
+
+    class Slange {
+        constructor() {
+            this.krop = [];
+            this.retning = new THREE.Vector3(0.05, 0, 0);
+            this.tilføjSegment(0, 0, 0);
+        }
+
+        tilføjSegment(x, y, z) {
+            const geometri = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+            const materiale = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            const segment = new THREE.Mesh(geometri, materiale);
+            segment.position.set(x, y, z);
+            this.krop.unshift(segment);
+            spilleplade.add(segment);
+        }
+
+        bevæg() {
+            const hoved = this.krop[0].position.clone();
+            hoved.add(this.retning);
+            this.tilføjSegment(hoved.x, hoved.y, hoved.z);
+            spilleplade.remove(this.krop.pop());
+        }
+    }
+
+    class Mad {
+        constructor() {
+            const geometri = new THREE.SphereGeometry(0.025);
+            const materiale = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+            this.mesh = new THREE.Mesh(geometri, materiale);
+            this.genplacer();
+            spilleplade.add(this.mesh);
+        }
+
+        genplacer() {
+            this.mesh.position.set(
+                (Math.random() - 0.5) * 0.9,
+                0.05,
+                (Math.random() - 0.5) * 0.9
+            );
+        }
+    }
+
+    function opdaterSpil() {
+        if (!gameStartet) return;
+
+        slange.bevæg();
+
+        if (slange.krop[0].position.distanceTo(mad.mesh.position) < 0.05) {
+            mad.genplacer();
+            slange.tilføjSegment(
+                slange.krop[slange.krop.length - 1].position.x,
+                slange.krop[slange.krop.length - 1].position.y,
+                slange.krop[slange.krop.length - 1].position.z
+            );
+        }
+    }
+
+    function render() {
+        opdaterSpil();
+        renderer.render(scene, camera);
+    }
+
+    init();
+    </script>
+</body>
+</html>
